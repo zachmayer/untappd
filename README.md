@@ -1,4 +1,4 @@
-untappd-r
+untappd
 ==============
 
 R wrapper for the [Untappd v4 API](https://untappd.com/api/docs/v4).
