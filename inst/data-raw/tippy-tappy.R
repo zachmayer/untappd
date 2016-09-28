@@ -28,13 +28,12 @@ if(FALSE){
   names(new_users) <- unique_users
 
   #Load last 25 checkins for each user
-  unique_users_subset <- unique_users[1:length(unique_users)]
-  for(x in unique_users_subset){
+  for(x in unique_users){
     i <- which(unique_users == x)
-    print(i)
+    print(paste('User', i, 'of', length(unique_users)))
     if(is.null(new_users[[x]])){
       Sys.sleep(36)
-      new_users[[x]] <- get_checkins('user', x, n=25, wait=0)
+      new_users[[x]] <- get_checkins('user', x, n=25, wait=0, httr_timeout=300)
     }
   }
 
