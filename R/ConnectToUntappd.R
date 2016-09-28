@@ -14,6 +14,7 @@ parse_checkins <- function(c){
     data.table::data.table(
       rating = x$rating_score,
       user_id = x$user$uid,
+      user_name = x$user$user_name,
       beer_id = x$beer$bid,
       brewery_id = x$brewery$brewery_id,
       checkin_id = x$checkin_id,
