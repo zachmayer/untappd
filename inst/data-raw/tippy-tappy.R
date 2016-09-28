@@ -172,9 +172,7 @@ tt_tsne <- Rtsne(
 plot(tt_tsne$Y)
 points(tt_tsne$Y[mybeers_map,,drop=F], col='red')
 text(tt_tsne$Y[mybeers_map,,drop=F], col='red', labels=zach[beer_id %in% beer_map,beer_name])
-tsne_sim <- as.matrix(dist(tt_tsne$Y))
-tsne_sim <- max(tsne_sim) - tsne_sim
-tsne_sim <- scale(tsne_sim, center=T, scale=T)
+tsne_sim <- 1 / (as.matrix(dist(tt_tsne$Y)) + 1)
 summary(as.numeric(tsne_sim))
 tsne_sim <- as(tsne_sim, 'dgCMatrix')
 
