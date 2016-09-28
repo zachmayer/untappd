@@ -1,8 +1,12 @@
 Package: untapped
 Type: Package
-Title: What the Package Does (Title Case)
+Title: Access the untapped API and reccomend beers.
 Version: 0.1.0
-Authors@R: person("First", "Last", email = "first.last@example.com", role = c("aut", "cre"))
-Description: More about what it does (maybe more than one line)
-License: What license is it under?
+Authors@R: person("Zachary", "Deane-Mayer", email = "zach.mayer@gmail.com", role = c("aut", "cre"))
+Description: Access the untapped API and reccomend beers.
+License: MIT + file LICENSE
 LazyData: TRUE
+Imports: jsonlite,
+    httr,
+    data.table,
+    pbapply
