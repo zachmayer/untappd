@@ -9,4 +9,5 @@ LazyData: TRUE
 Imports: jsonlite,
     httr,
     data.table,
-    pbapply
+    pbapply,
+    igraph
