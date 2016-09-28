@@ -35,6 +35,7 @@ get_checkins <- function(
   wait = 5,
   n=100,
   record_per_page=25,
+  httr_timeout=120,
   config=getOption('untappd_config')){
 
   calls <- ceiling(n/record_per_page)
@@ -51,7 +52,8 @@ get_checkins <- function(
         client_secret = config$client_secret,
         access_token = config$access_token,
         max_id = max_id
-      )
+      ),
+      httr::timeout(httr_timeout)
     )
     httr::stop_for_status(response)
     content <- httr::content(response)
