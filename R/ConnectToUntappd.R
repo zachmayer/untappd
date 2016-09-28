@@ -43,17 +43,19 @@ get_checkins <- function(
   checkin_list <- list()
 
   pb <- txtProgressBar(min=0, max=calls, style=3, char='+')
+  my_handle <- handle(config$endpoint)
   for(i in 1:calls){
     response <- httr::GET(
       config$endpoint,
+      handle=my_handle,
+      httr::timeout(httr_timeout),
       path=paste0('/v4/', type, '/checkins/', id),
       query=list(
         client_id = config$client_id,
         client_secret = config$client_secret,
         access_token = config$access_token,
         max_id = max_id
-      ),
-      httr::timeout(httr_timeout)
+      )
     )
     httr::stop_for_status(response)
     content <- httr::content(response)
@@ -69,6 +71,7 @@ get_checkins <- function(
     }
     Sys.sleep(wait)
   }
+  rm(my_handle)
   res <- data.table::rbindlist(checkin_list)
   return(res)
   return(checkins)

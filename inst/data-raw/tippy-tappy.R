@@ -9,6 +9,7 @@ library(irlba)
 library(Rtsne)
 library(data.table)
 library(lubridate)
+library(httr)
 options(mc.cores = parallel::detectCores())
 
 #Load my personal ratings data
@@ -28,61 +29,64 @@ if(FALSE){
   names(new_users) <- unique_users
 
   #Load last 25 checkins for each user
+  save(new_users, file='~/new_users.RDS')
+  #load('~/new_users.RDS')
   for(x in unique_users){
     i <- which(unique_users == x)
     print(paste('User', i, 'of', length(unique_users)))
     if(is.null(new_users[[x]])){
-      Sys.sleep(36)
-      new_users[[x]] <- get_checkins('user', x, n=25, wait=0, httr_timeout=300)
+      #Sys.sleep(36)
+      new_users[[x]] <- get_checkins('user', x, n=25, wait=0, httr_timeout=240000)
     }
   }
 
   new_users_full <- rbindlist(new_users)
   devtools::use_data(new_users_full, overwrite=TRUE)
 }
+
 #START HERE!!
 data('tt_room')
+data('new_users_full')
+tt_room[,at_tt := 1]
+new_users_full[,at_tt := 0]
+dat <- rbind(tt_room, new_users_full, use.names=T, fill=T)
 
 #Parse date
-tt_room[,time := as.POSIXct(strptime(time, '%a, %d %b %Y %H:%M:%S'))]
+dat[,time := as.POSIXct(strptime(time, '%a, %d %b %Y %H:%M:%S'))]
 
 #Exclude 0's (these are users who forogt to rate)
-tt_room <- tt_room[rating > 0,]
+dat <- dat[rating > 0,]
 
 #Exclude dupes (keep most recent)
-data.table::setkeyv(tt_room, c('user_id', 'checkin_id'))
-tt_room[,dup := duplicated(checkin_id, fromLast=TRUE), by='user_id']
+data.table::setkeyv(dat, c('user_id', 'checkin_id'))
+dat[,dup := duplicated(checkin_id, fromLast=TRUE), by='user_id']
 
 #Lookit the data
 ME <- zach$user_id[1]
 mybeers <- sort(unique(zach$beer_id))
-#tt_room[(beer_id %in% zach$beer_id) & (user_id != ME) & rating > 4,]
+#dat[(beer_id %in% zach$beer_id) & (user_id != ME) & rating > 4,]
 
 #Unique beers
-beer <- unique(tt_room[rating > 0, list(
+beer <- unique(dat[rating > 0, list(
   rating_sum = sum(rating),
   n = .N,
-  last_seen = max(time)
+  last_seen = max(time),
+  at_tt = max(at_tt)
   ), by=c('beer_id', 'brewery_name', 'beer_name', 'abv')])
 beer[,rating_mean := rating_sum / n]
 M <- beer[,max(rating_mean)]
 beer[,rating_bin := (rating_mean) / M]
 beer[,rating_pois := pois.exact(rating_sum, n, conf.level=.95)$lower]
-rating_model <- bayesglm(
-  rating_bin ~ beer_name, beer,
-  weight=beer$n, family=binomial #quasibinomial is slower but more accurate
-  )
-beer[,rating_bin_glm := predict(rating_model, type='response') * M]
 beer[,c('rating_sum', 'rating_bin') := NULL]
 data.table::setorder(beer, -rating_pois)
 beer[,see_recently := last_seen >= as.POSIXct(Sys.time() - 3600*24*7)]
-beer[see_recently==T,]
+beer[see_recently==T & at_tt == 1,]
 
 #TSNE users
-user_map <- tt_room[,sort(unique(user_id))]
-beer_map <- tt_room[,sort(unique(beer_id))]
+user_map <- dat[,sort(unique(user_id))]
+beer_map <- dat[,sort(unique(beer_id))]
 ME_map <- which(user_map == ME)
-tt_mat <- tt_room[,list(
+tt_mat <- dat[,list(
   u = fmatch(user_id, user_map),
   b = fmatch(beer_id, beer_map),
   rating,
@@ -109,19 +113,19 @@ row_wise_norm <- function(m) {
   d <- Diagonal(x=1/d)
   t(crossprod(m, d))
 }
-user_map <- tt_room[,sort(unique(user_id))]
-beer_map <- tt_room[,sort(unique(beer_id))]
+user_map <- dat[,sort(unique(user_id))]
+beer_map <- dat[,sort(unique(beer_id))]
 ME_map <- which(user_map == ME)
 mybeers_map <- which(beer_map %in% mybeers)
 mybeers_ratings <- zach[beer_id %in% beer_map,rating]
 not_mybeers_map <- which(! beer_map %in% mybeers)
-tt_mat <- tt_room[,list(
+tt_mat <- dat[,list(
   u = fmatch(user_id, user_map),
   b = fmatch(beer_id, beer_map),
   rating,
   good = 0.0
 )]
-#tt_mat[rating < 4, good := -.1]
+tt_mat[rating < 4, good := -.1]
 tt_mat[rating > 4, good := 1]
 tt_mat <- sparseMatrix(
   i=tt_mat$b,
@@ -139,13 +143,14 @@ myratings <- data.table(b=mybeers_map, w=mybeers_ratings / max(mybeers_ratings))
 mysims_dat <- merge(mysims_dat, myratings, by='b', all.x=TRUE)
 mysims_dat[,beer_id := beer_map[rec]]
 setkeyv(mysims_dat, 'beer_id')
-mysims_dat <- mysims_dat[,list(x = max(x * w)), by='beer_id']
+mysims_dat <- mysims_dat[,list(x = sum(x * w) / sum(w)), by='beer_id']
 mysims_dat <- merge(mysims_dat, beer, by='beer_id', all.x=T)
 setorder(mysims_dat, -x)
-head(mysims_dat[!beer_id %in% mybeers & see_recently ==T,], 10)
+head(mysims_dat[!beer_id %in% mybeers & see_recently == T & at_tt == 1,], 10)
 
 #TSNE beers
-tt_mat <- tt_room[,list(
+keep <- beer[n>1, sort(unique(beer_id))]
+tt_mat <- dat[beer_id %in% keep,list(
   u = fmatch(user_id, user_map),
   b = fmatch(beer_id, beer_map),
   rating
@@ -153,19 +158,42 @@ tt_mat <- tt_room[,list(
 tt_mat <- sparseMatrix(
   i=tt_mat$b,
   j=tt_mat$u,
-  x=tt_mat$rating)
-tt_mat <- row_wise_norm(tt_mat)
-tt_sim_beer <- tcrossprod(tt_mat)
-diag(tt_sim_beer) <- 0 #Don't self-reccomend
-diag(tt_sim_beer) <- 1 #Always self-reccomend
-
-
-tt_dist_beer <- as.dist(crossprod(tt_mat))
-tt_tsne <- Rtsne(tt_dist, dims=2, is_distance=T, verbose=TRUE)
+  x=tt_mat$rating - median(tt_mat$rating)
+)
+#tt_mat <- row_wise_norm(tt_mat)
+tt_mat_pca <- prcomp(as.matrix(tt_mat), retx=T, center=FALSE, scale=FALSE)$x[,1:50]
+set.seed(42)
+tt_tsne <- Rtsne(
+  tt_mat_pca, dims=2,
+  check_duplicates=F,
+  pca=F,
+  theta=0.5,
+  verbose=TRUE)
 plot(tt_tsne$Y)
 points(tt_tsne$Y[mybeers_map,,drop=F], col='red')
+text(tt_tsne$Y[mybeers_map,,drop=F], col='red', labels=zach[beer_id %in% beer_map,beer_name])
+tsne_sim <- as.matrix(dist(tt_tsne$Y))
+tsne_sim <- max(tsne_sim) - tsne_sim
+tsne_sim <- scale(tsne_sim, center=T, scale=T)
+summary(as.numeric(tsne_sim))
+tsne_sim <- as(tsne_sim, 'dgCMatrix')
+
+mysims <- tsne_sim[mybeers_map,,drop=F] #Keep the beers I've had
+mysims <- summary(mysims)
+mysims_dat <- data.table(b=mybeers_map[mysims$i], rec=mysims$j, x=mysims$x)
+myratings <- data.table(b=mybeers_map, w=mybeers_ratings / max(mybeers_ratings))
+mysims_dat <- merge(mysims_dat, myratings, by='b', all.x=TRUE)
+mysims_dat[,beer_id := beer_map[rec]]
+setkeyv(mysims_dat, 'beer_id')
+mysims_dat <- mysims_dat[,list(x = max(x * w)), by='beer_id']
+mysims_dat <- merge(mysims_dat, beer, by='beer_id', all.x=T)
+setorder(mysims_dat, -x)
+head(mysims_dat[!beer_id %in% mybeers & see_recently == T & at_tt == 1,], 10)
+
+
+
 
 #Exclude me from the data
-tt_graph <- tt_room[!user_id %in% ME, list(user_id, beer_id, rating, checkin_id)]
+tt_graph <- dat[!user_id %in% ME, list(user_id, beer_id, rating, checkin_id)]
 tt_graph <- tt_graph[rating > 0,]
 tt_subgraph <- tt_graph[beer_id %in% mybeers,]
