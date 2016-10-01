@@ -14,23 +14,23 @@ options(mc.cores = parallel::detectCores())
 
 #Load my personal ratings data
 zach <- get_checkins('user', 'zachmayer86', n=25, wait=0)
-zach[,user_name := NULL]
 devtools::use_data(zach, overwrite=TRUE)
 
 if(FALSE){
 
   #Takes about an hour, to make sure we don't run over the API limits
   tt_room <- get_checkins('venue', '290766', n=2500, wait=36)
-  unique_users <- sort(unique(tt_room$user_name))
   devtools::use_data(tt_room, overwrite=TRUE)
 
   #Make data sets
+  unique_users <- sort(unique(tt_room$user_name))
   new_users <- as.list(rep(list(NULL), length(unique_users)))
   names(new_users) <- unique_users
 
   #Load last 25 checkins for each user
   save(new_users, file='~/new_users.RDS')
   #load('~/new_users.RDS')
+  #Sys.sleep(600)
   for(x in unique_users){
     i <- which(unique_users == x)
     print(paste('User', i, 'of', length(unique_users)))

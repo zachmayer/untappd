@@ -35,8 +35,7 @@ get_checkins <- function(
   wait = 5,
   n=100,
   record_per_page=25,
-  retries = 5,
-  retry_wait=36,
+  httr_timeout=120,
   config=getOption('untappd_config')){
 
   calls <- ceiling(n/record_per_page)
@@ -44,28 +43,20 @@ get_checkins <- function(
   checkin_list <- list()
 
   pb <- txtProgressBar(min=0, max=calls, style=3, char='+')
+  my_handle <- handle(config$endpoint)
   for(i in 1:calls){
-    keep_trying <- 5
-    while(keep_trying > 0){
-      response <- httr::GET(
-        config$endpoint,
-        path=paste0('/v4/', type, '/checkins/', id),
-        query=list(
-          client_id = config$client_id,
-          client_secret = config$client_secret,
-          access_token = config$access_token,
-          max_id = max_id
-        )
+    response <- httr::GET(
+      config$endpoint,
+      handle=my_handle,
+      httr::timeout(httr_timeout),
+      path=paste0('/v4/', type, '/checkins/', id),
+      query=list(
+        client_id = config$client_id,
+        client_secret = config$client_secret,
+        access_token = config$access_token,
+        max_id = max_id
       )
-      if(status_code(response) != 200){
-        warn_for_status(response)
-        keep_trying <- keep_trying - 1
-        Sys.sleep(retry_wait)
-      } else{
-        keep_trying <- 0
-      }
-      warning('Re-trying')
-    }
+    )
     httr::stop_for_status(response)
     content <- httr::content(response)
     checkins <- content[['response']]$checkins$items
@@ -80,6 +71,7 @@ get_checkins <- function(
     }
     Sys.sleep(wait)
   }
+  rm(my_handle)
   res <- data.table::rbindlist(checkin_list)
   return(res)
   return(checkins)
