@@ -19,8 +19,11 @@ devtools::use_data(zach, overwrite=TRUE)
 
 if(FALSE){
 
+  data(tt_room)
+  ttroom_1 <- copy(tt_room)
+
   #Takes about an hour, to make sure we don't run over the API limits
-  tt_room <- get_checkins('venue', '290766', n=2500, wait=36)
+  tt_room2 <- get_checkins('venue', '290766', n=2500, wait=36)
   unique_users <- sort(unique(tt_room$user_name))
   devtools::use_data(tt_room, overwrite=TRUE)
 
@@ -172,8 +175,11 @@ tt_tsne <- Rtsne(
 plot(tt_tsne$Y)
 points(tt_tsne$Y[mybeers_map,,drop=F], col='red')
 text(tt_tsne$Y[mybeers_map,,drop=F], col='red', labels=zach[beer_id %in% beer_map,beer_name])
-tsne_sim <- 1 / (as.matrix(dist(tt_tsne$Y)) + 1)
-tsne_sim <- scale(tsne_sim, center=T, scale=T)
+
+tsne_sim <- as.matrix(dist(tt_tsne$Y))
+tsne_sim <- max(tsne_sim) - tsne_sim
+#tsne_sim <- 1 / (1+tsne_sim)
+tsne_sim <- scale(log1p(tsne_sim), center=T, scale=T)
 summary(as.numeric(tsne_sim))
 tsne_sim <- as(tsne_sim, 'dgCMatrix')
 
