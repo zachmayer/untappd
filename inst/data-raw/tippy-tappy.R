@@ -19,11 +19,8 @@ devtools::use_data(zach, overwrite=TRUE)
 
 if(FALSE){
 
-  data(tt_room)
-  ttroom_1 <- copy(tt_room)
-
   #Takes about an hour, to make sure we don't run over the API limits
-  tt_room2 <- get_checkins('venue', '290766', n=2500, wait=36)
+  tt_room <- get_checkins('venue', '290766', n=2500, wait=36)
   unique_users <- sort(unique(tt_room$user_name))
   devtools::use_data(tt_room, overwrite=TRUE)
 
