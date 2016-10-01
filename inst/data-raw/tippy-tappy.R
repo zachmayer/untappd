@@ -35,11 +35,10 @@ if(FALSE){
     i <- which(unique_users == x)
     print(paste('User', i, 'of', length(unique_users)))
     if(is.null(new_users[[x]])){
-      Sys.sleep(36)
-      new_users[[x]] <- get_checkins('user', x, n=25, wait=0, httr_timeout=240000)
+      #Sys.sleep(36)
+      new_users[[x]] <- get_checkins('user', x, n=25, wait=0, httr_timeout=600)
     }
   }
-
   new_users_full <- rbindlist(new_users)
   devtools::use_data(new_users_full, overwrite=TRUE)
 }
