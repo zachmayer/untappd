@@ -46,19 +46,24 @@ if(FALSE){
 #START HERE!!
 data('tt_room')
 data('new_users_full')
+data('zach')
 tt_room[,at_tt := 1]
 new_users_full[,at_tt := 0]
 dat <- rbind(tt_room, new_users_full, use.names=T, fill=T)
+dat <- rbind(dat, zach, use.names=T, fill=T)
 
 #Parse date
 dat[,time := as.POSIXct(strptime(time, '%a, %d %b %Y %H:%M:%S'))]
 
-#Exclude 0's (these are users who forogt to rate)
+#Exclude 0's (these are users who forgot to rate)
 dat <- dat[rating > 0,]
 
 #Exclude dupes (keep most recent)
 data.table::setkeyv(dat, c('user_id', 'checkin_id'))
-dat[,dup := duplicated(checkin_id, fromLast=TRUE), by='user_id']
+dat[,dup := duplicated(checkin_id, fromLast=TRUE)]
+dat <- dat[dup != TRUE,]
+dat[,dup := NULL]
+data.table::setkeyv(dat, c('user_id', 'checkin_id'))
 
 #Lookit the data
 ME <- zach$user_id[1]
@@ -148,7 +153,7 @@ setorder(mysims_dat, -x)
 head(mysims_dat[!beer_id %in% mybeers & see_recently == T & at_tt == 1,], 10)
 
 #TSNE beers
-keep <- beer[n>1, sort(unique(beer_id))]
+keep <- beer[n>1, sort(unique(beer_id))] #Do users with more than 1 rating
 tt_mat <- dat[beer_id %in% keep,list(
   u = fmatch(user_id, user_map),
   b = fmatch(beer_id, beer_map),
