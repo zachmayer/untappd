@@ -152,9 +152,12 @@ mysims_dat <- merge(mysims_dat, beer, by='beer_id', all.x=T)
 setorder(mysims_dat, -x)
 head(mysims_dat[!beer_id %in% mybeers & see_recently == T & at_tt == 1,], 10)
 
+#Do users with more than 1 rating
+users <- dat[, list(.N), by='user_id']
+users <- users[N>1,]
+
 #TSNE beers
-keep <- beer[n>1, sort(unique(beer_id))] #Do users with more than 1 rating
-tt_mat <- dat[beer_id %in% keep,list(
+tt_mat <- dat[user_id %in% users$user_id,list(
   u = fmatch(user_id, user_map),
   b = fmatch(beer_id, beer_map),
   rating
@@ -165,13 +168,14 @@ tt_mat <- sparseMatrix(
   x=tt_mat$rating - median(tt_mat$rating)
 )
 #tt_mat <- row_wise_norm(tt_mat)
-tt_mat_pca <- prcomp(as.matrix(tt_mat), retx=T, center=FALSE, scale=FALSE)$x[,1:50]
+tt_mat_pca <- prcomp(as.matrix(tt_mat), retx=T, center=FALSE, scale=FALSE)$x[,1:100]
 set.seed(42)
 tt_tsne <- Rtsne(
   tt_mat_pca, dims=2,
   check_duplicates=F,
   pca=F,
-  theta=0.5,
+  theta=0.25,
+  max_iter=2500,
   verbose=TRUE)
 plot(tt_tsne$Y)
 points(tt_tsne$Y[mybeers_map,,drop=F], col='red')
