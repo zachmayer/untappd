@@ -178,7 +178,8 @@ user_weighted_tsne[,zach_rating := round(zach_rating, 3)]
 user_weighted_tsne[order(zach_rating, rating, decreasing=T),][at_tt==1 & see_recently == 1 & zach_drank == 0,]
 
 #TSNE on beers
-beer_tsne <- Rtsne(mod$v, dims=2, pca=F, check_duplicates=F, verbose=TRUE, theta=0)
+set.seed(42)
+beer_tsne <- Rtsne(mod$v, dims=2, pca=F, check_duplicates=F, verbose=TRUE, theta=0.5)
 plot(beer_tsne$Y)
 points(beer_tsne$Y[GOOD_BEERS,,drop=F], col='red', pch=18, cex=2)
 beer_dist <- dist2(beer_tsne$Y[GOOD_BEERS,,drop=FALSE], beer_tsne$Y, method='euclidean', norm='none')
