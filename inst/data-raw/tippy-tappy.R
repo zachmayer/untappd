@@ -17,7 +17,11 @@ options(mc.cores = parallel::detectCores())
 
 #Load my personal ratings data
 zach <- get_checkins('user', 'zachmayer86', n=25, wait=0)
+jon <- get_checkins('user', 'raven31', n=25, wait=0)
+ben <- get_checkins('user', 'TraderAllenPoe', n=25, wait=0)
 devtools::use_data(zach, overwrite=TRUE)
+devtools::use_data(jon, overwrite=TRUE)
+devtools::use_data(ben, overwrite=TRUE)
 
 if(FALSE){
 
@@ -53,13 +57,20 @@ if(FALSE){
 data('tt_room')
 data('new_users_full')
 data('zach')
+data('jon')
+data('ben')
 
 #START HERE!!
 tt_room[,at_tt := 1]
 new_users_full[,at_tt := 0]
 dat <- rbind(tt_room, new_users_full, use.names=T, fill=T)
 dat <- rbind(dat, zach, use.names=T, fill=T)
+dat <- rbind(dat, jon, use.names=T, fill=T)
+dat <- rbind(dat, ben, use.names=T, fill=T)
 dat[user_name == 'zachmayer86',]
+
+#CHOOSE USER
+mydata <- jon
 
 #Parse date
 dat[,time := as.POSIXct(strptime(time, '%a, %d %b %Y %H:%M:%S'))]
@@ -101,17 +112,17 @@ summary(dat$rating)
 beers <- unique(dat[rating > 0, list(
   rating = mean(rating),
   n = .N,
-  zach_drank = as.integer(any(user_id == zach$user_id[1])),
+  zach_drank = as.integer(any(user_id == mydata$user_id[1])),
   last_seen = max(time[at_tt == 1]),
   at_tt = max(at_tt, na.rm=T)
-), by=c('beer', 'brewery_name', 'beer_name', 'abv')])
+), by=c('beer', 'beer_id', 'brewery_name', 'beer_name', 'abv')])
 data.table::setorder(beers, -rating)
 beers[,see_recently := as.integer(last_seen >= as.POSIXct(Sys.time() - 3600*24*7))]
 beers[see_recently==1 & at_tt == 1,]
 
 #Beers I like
-GOOD_BEERS <- dat[rating>0 & user_id == zach$user_id[1], beer]
-ME <- dat[user_id == zach$user_id[1], user[1]]
+GOOD_BEERS <- dat[rating>0 & user_id == mydata$user_id[1], beer]
+ME <- dat[user_id == mydata$user_id[1], user[1]]
 
 #User-beer matrix
 mat <- sparseMatrix(
@@ -132,7 +143,7 @@ weights <- data.table(
   weight = sim
 )
 user_weighted <- merge(dat, weights, by='user', all=FALSE)
-user_weighted <- user_weighted[,list(zach_rating = mean(rating * weight)), by=c('beer')]
+user_weighted <- user_weighted[,list(zach_rating = sum(rating * weight)), by=c('beer')]
 user_weighted <- merge(user_weighted, beers, by='beer')
 user_weighted[,zach_rating := round(zach_rating, 3)]
 user_weighted[order(zach_rating, rating, decreasing=T),][at_tt==1 & see_recently == 1 & zach_drank == 0,]
@@ -145,7 +156,7 @@ weights <- data.table(
   weight = sim
 )
 beer_weighted <- merge(dat, weights, by='beer', all=FALSE)
-beer_weighted <- beer_weighted[,list(zach_rating = mean(rating * weight)), by=c('beer')]
+beer_weighted <- beer_weighted[,list(zach_rating = sum(weight)), by=c('beer')]
 beer_weighted <- merge(beer_weighted, beers, by='beer')
 beer_weighted[,zach_rating := round(zach_rating, 3)]
 beer_weighted[order(zach_rating, rating, decreasing=T),][at_tt==1 & see_recently == 1 & zach_drank == 0,]
@@ -162,6 +173,7 @@ recs[,zach_rating := round(zach_rating, 3)]
 recs[order(zach_rating, rating, decreasing=T),][at_tt==1 & see_recently == 1 & zach_drank == 0,]
 
 #TSNE on users
+set.seed(42)
 user_tsne <- Rtsne(mod$u, dims=2, pca=F, check_duplicates=F, verbose=TRUE, theta=0)
 plot(user_tsne$Y)
 points(user_tsne$Y[ME,,drop=F], col='red', pch=18, cex=2)
@@ -191,23 +203,63 @@ weights <- data.table(
   weight = sim
 )
 beer_weighted_tsne <- merge(dat, weights, by='beer', all=FALSE)
-beer_weighted_tsne <- beer_weighted_tsne[,list(zach_rating = mean(rating * weight)), by=c('beer')]
+beer_weighted_tsne <- beer_weighted_tsne[,list(zach_rating = sum(weight)), by=c('beer')]
 beer_weighted_tsne <- merge(beer_weighted_tsne, beers, by='beer')
 beer_weighted_tsne[,zach_rating := round(zach_rating, 3)]
 beer_weighted_tsne[order(zach_rating, rating, decreasing=T),][at_tt==1 & see_recently == 1 & zach_drank == 0,]
 
 #Choose method
-final <- user_weighted_tsne
+#final <- user_weighted_tsne
+final <- user_weighted
 final <- final[order(zach_rating, rating, decreasing=T),]
-final[at_tt==1 & see_recently == 1 & zach_drank == 0 & zach_rating > 0.03,list(brewery_name, beer_name)]
+
+#Tip tap
+final[at_tt==1 & see_recently == 1 & zach_drank == 0,list(brewery_name, beer_name, zach_rating, rating)]
+
+#Global
+head(final[zach_drank == 0,list(brewery_name, beer_name, zach_rating, rating)], 10)
+
+########################################################
+# Make recs for a new user
+########################################################
+
+make_user_recs <- function(user_id='raven31'){
+  data <- get_checkins('user', user_id, n=25, wait=0)
+  setorderv(data, 'checkin_id')
+  data <- data[!duplicated(stri_paste(user_name, beer_id)),]
+  data[,drank := 1]
+  data <- merge(data, beers[,list(beer_id, beer)], by='beer_id')
+  good_beer_ids <- sort(unique(data[,beer]))
+  sim <- sim2(mod$v[good_beer_ids,,drop=F], mod$v, method='cosine', norm='none')[1,]
+  weights <- data.table(
+    beer = 1:length(sim),
+    weight = sim
+  )
+  beer_weighted <- merge(beers, weights, by='beer', all=FALSE)
+  beer_weighted <- merge(beer_weighted, data[,list(beer, drank)], by='beer', all.x=TRUE)
+  beer_weighted[is.na(drank),drank := 0]
+  beer_weighted <- beer_weighted[,list(zach_rating = weight[1]), by=c('beer', 'drank')]
+  beer_weighted <- merge(beer_weighted, beers, by='beer')
+  beer_weighted[,zach_rating := round(zach_rating, 3)]
+  beer_weighted <- beer_weighted[order(zach_rating, decreasing=T),][drank == 0,]
+  beer_weighted[at_tt==1 & see_recently == 1,list(brewery_name, beer_name, zach_rating, rating)]
+
+}
 
 
 
 
 
 
+make_beer_recs <- function(name = 'Old Speckled Hen'){
+  library(stringdist)
+  id <- beers[,beer[which.min(stringdist(tolower(name), tolower(beer_name), method='cosine'))]]
+  beers[id,]
 
+  beers[beer_id == 3121,]
+  mod$v
 
+}
 
 
 ########################################################

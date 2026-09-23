@@ -9,7 +9,7 @@ load_config_file <- function(config_path=get_default_config_path()) {
   )
 }
 
-parse_checkins <- function(c){
+parse_checkins <- memoise::memoise(function(c){
   out <- lapply(c, function(x){
     data.table::data.table(
       rating = x$rating_score,
@@ -27,9 +27,9 @@ parse_checkins <- function(c){
   out <- data.table::rbindlist(out)
   data.table::setkeyv(out, 'checkin_id')
   return(out)
-}
+})
 
-get_checkins <- function(
+get_checkins <- memoise::memoise(function(
   type = 'user',
   id = 'zachmayer86',
   wait = 5,
@@ -75,4 +75,4 @@ get_checkins <- function(
   res <- data.table::rbindlist(checkin_list)
   return(res)
   return(checkins)
-}
+})

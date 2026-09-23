@@ -10,4 +10,5 @@ Imports: jsonlite,
     httr,
     data.table,
     pbapply,
-    igraph
+    igraph,
+    memoise
